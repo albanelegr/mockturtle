@@ -73,8 +73,95 @@ public:
 
   bool run()
   {
+
     /* TODO: write your implementation here */
-    return false;
+    if (_ntk.num_pis() < 7)
+    {
+      _st.split_var = _ntk.num_pis();
+    }
+    else
+    {
+      for (auto i =7; i <= _ntk.num_pis(); ++i)
+      {
+        if (32 +std::pow(2,i-3) * _ntk.size() < std::pow(2,29))
+        {
+          _st.split_var = i;
+        }
+      }
+    }
+
+    _st.rounds = std::pow(2,_ntk.num_pis() - _st.split_var);
+
+    bool equivalent = true;
+    pattern_t node_to_value(_ntk);
+
+    _ntk.foreach_pi( [&]( auto const& j, auto k ) {
+      kitty::dynamic_truth_table tt (_st.split_var);
+      if ( k < _st.split_var )
+        kitty::create_nth_var( tt, k );
+
+      node_to_value[j] = tt;
+    } );
+
+    default_simulator<kitty::dynamic_truth_table> sim( _st.split_var );
+    simulate_nodes(_ntk, node_to_value, sim);
+    _ntk.foreach_po( [&]( auto const& j, auto k ) {
+      if ( _ntk.is_complemented(j) )
+      {
+        if (!is_const0(~node_to_value[j])) {
+          equivalent = false;
+        }
+      }
+      else
+      {
+        if (!is_const0(node_to_value[j])) {
+          equivalent = false;
+        }
+      }
+    } );
+
+    for (uint32_t ite = 1; ite <= _st.rounds - 1; ++ite)
+    {
+  
+      _ntk.foreach_gate( [&]( auto const& k, auto i ){
+         node_to_value.erase(k); });
+
+      uint32_t l = ite;
+
+      _ntk.foreach_pi( [&]( auto const& j, auto k ) {
+        if (k >= _st.split_var ){
+          if (l % 2 == 1){
+            if (is_const0(node_to_value[j])) node_to_value[j] = ~node_to_value[j];
+          }
+          else{
+            if (!is_const0(node_to_value[j])) node_to_value[j] = ~node_to_value[j];
+          }
+
+          l /= 2;
+        }
+
+      } );
+      simulate_nodes(_ntk, node_to_value, sim);
+      _ntk.foreach_po( [&]( auto const& j, auto k ) {
+         if ( _ntk.is_complemented(j) )
+         {
+           if (!is_const0(~node_to_value[j])) {
+             equivalent = false;
+           }
+         }
+         else
+         {
+           if (!is_const0(node_to_value[j])) {
+             equivalent = false;
+           }
+         }
+       });
+
+    }
+
+
+  return equivalent;
+    
   }
 
 private:
