@@ -74,89 +74,103 @@ public:
   bool run()
   {
 
-    /* TODO: write your implementation here */
-    if (_ntk.num_pis() < 7)
+    /* Computing number of rounds and splitting variable */
+
+    if (_ntk.num_pis() <= 6)
     {
       _st.split_var = _ntk.num_pis();
     }
     else
     {
-      for (auto i =7; i <= _ntk.num_pis(); ++i)
+      for (auto i =7; i <= _ntk.num_pis() && (32 +std::pow(2,i-3) * _ntk.size() < std::pow(2,29)) ; ++i)
       {
-        if (32 +std::pow(2,i-3) * _ntk.size() < std::pow(2,29))
-        {
-          _st.split_var = i;
-        }
+          _st.split_var = i;     
       }
     }
 
     _st.rounds = std::pow(2,_ntk.num_pis() - _st.split_var);
 
-    bool equivalent = true;
-    pattern_t node_to_value(_ntk);
+/* Initialization of the patterns */
 
-    _ntk.foreach_pi( [&]( auto const& j, auto k ) {
+    pattern_t patterns(_ntk);
+
+    _ntk.foreach_pi( [&]( auto const& j, auto k ) 
+      {
       kitty::dynamic_truth_table tt (_st.split_var);
       if ( k < _st.split_var )
         kitty::create_nth_var( tt, k );
 
-      node_to_value[j] = tt;
-    } );
+      patterns[j] = tt;
+      } );
+
+/* Simulating patterns and check for equivalence of the first round*/
+
+    bool miter_is_eq = true;
 
     default_simulator<kitty::dynamic_truth_table> simulator( _st.split_var );
-    simulate_nodes(_ntk, node_to_value, simulator);
-    _ntk.foreach_po( [&]( auto const& j, auto k ) {
+
+    simulate_nodes(_ntk, patterns, simulator);
+
+    _ntk.foreach_po( [&]( auto const& j, auto k ) 
+    {
       if ( _ntk.is_complemented(j) )
       {
-        if (!is_const0(~node_to_value[j])) {
-          equivalent = false;
+        if (!is_const0(~patterns[j])) {
+          miter_is_eq = false;
         }
       }
       else
       {
-        if (!is_const0(node_to_value[j])) {
-          equivalent = false;
+        if (!is_const0(patterns[j])) {
+          miter_is_eq = false;
         }
       }
     } );
 
-    for (uint32_t ite = 1; ite <= _st.rounds - 1; ++ite)
+
+/* update patterns, simulate and check of the equivalence of the two networks for each round */
+
+    for (uint32_t nb_rounds = 1; nb_rounds <= _st.rounds - 1; ++nb_rounds)
     {
   
-       pattern_t node_to_value(_ntk);
+       pattern_t patterns(_ntk);
+       _ntk.foreach_pi( [&]( auto const& j, auto k ) 
+       {
+       kitty::dynamic_truth_table tt (_st.split_var);
+       if ( k < _st.split_var )
+       kitty::create_nth_var( tt, k );
+       patterns[j] = tt;
+       } );
 
-    _ntk.foreach_pi( [&]( auto const& j, auto k ) {
-      kitty::dynamic_truth_table tt (_st.split_var);
-      if ( k < _st.split_var )
-        kitty::create_nth_var( tt, k );
 
-      node_to_value[j] = tt;
-    } );
+      uint32_t l = nb_rounds;
 
-      uint32_t l = ite;
-
-      _ntk.foreach_pi( [&]( auto const& j, auto k ) {
+      _ntk.foreach_pi( [&]( auto const& j, auto k ) 
+      {
         if (k >= _st.split_var ){
           if (l % 2 == 1){
-            node_to_value[j] = ~node_to_value[j];
+            patterns[j] = ~patterns[j];
           }
 
           l /= 2;
         }
 
       } );
-      simulate_nodes(_ntk, node_to_value, simulator);
-      _ntk.foreach_po( [&]( auto const& j, auto k ) {
+
+      simulate_nodes(_ntk, patterns, simulator);
+
+      _ntk.foreach_po( [&]( auto const& j, auto k ) 
+      {
          if ( _ntk.is_complemented(j) )
          {
-           if (!is_const0(~node_to_value[j])) {
-             equivalent = false;
+           if (!is_const0(~patterns[j])) {
+             miter_is_eq = false;
            }
          }
          else
          {
-           if (!is_const0(node_to_value[j])) {
-             equivalent = false;
+           if (!is_const0(patterns[j])) {
+             miter_is_eq = false;
            }
          }
        });
@@ -164,7 +178,7 @@ public:
     }
 
 
-  return equivalent;
+  return miter_is_eq;
     
   }
 
