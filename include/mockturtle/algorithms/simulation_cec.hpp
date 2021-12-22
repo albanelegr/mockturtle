@@ -103,8 +103,8 @@ public:
       node_to_value[j] = tt;
     } );
 
-    default_simulator<kitty::dynamic_truth_table> sim( _st.split_var );
-    simulate_nodes(_ntk, node_to_value, sim);
+    default_simulator<kitty::dynamic_truth_table> simulator( _st.split_var );
+    simulate_nodes(_ntk, node_to_value, simulator);
     _ntk.foreach_po( [&]( auto const& j, auto k ) {
       if ( _ntk.is_complemented(j) )
       {
@@ -123,25 +123,29 @@ public:
     for (uint32_t ite = 1; ite <= _st.rounds - 1; ++ite)
     {
   
-      _ntk.foreach_gate( [&]( auto const& k, auto i ){
-         node_to_value.erase(k); });
+       pattern_t node_to_value(_ntk);
+
+    _ntk.foreach_pi( [&]( auto const& j, auto k ) {
+      kitty::dynamic_truth_table tt (_st.split_var);
+      if ( k < _st.split_var )
+        kitty::create_nth_var( tt, k );
+
+      node_to_value[j] = tt;
+    } );
 
       uint32_t l = ite;
 
       _ntk.foreach_pi( [&]( auto const& j, auto k ) {
         if (k >= _st.split_var ){
           if (l % 2 == 1){
-            if (is_const0(node_to_value[j])) node_to_value[j] = ~node_to_value[j];
-          }
-          else{
-            if (!is_const0(node_to_value[j])) node_to_value[j] = ~node_to_value[j];
+            node_to_value[j] = ~node_to_value[j];
           }
 
           l /= 2;
         }
 
       } );
-      simulate_nodes(_ntk, node_to_value, sim);
+      simulate_nodes(_ntk, node_to_value, simulator);
       _ntk.foreach_po( [&]( auto const& j, auto k ) {
          if ( _ntk.is_complemented(j) )
          {
