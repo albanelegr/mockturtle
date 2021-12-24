@@ -74,6 +74,7 @@ public:
   bool run()
   {
 
+
     /* Computing number of rounds and splitting variable */
 
     if (_ntk.num_pis() <= 6)
